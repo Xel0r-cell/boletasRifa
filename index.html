@@ -564,7 +564,7 @@ function updateLivePreview() {
           <div class="bp-title" style="font-family:'${fontCSS}',sans-serif;font-weight:${fontW};text-shadow: 2px 2px 1px ${shadowColor};">${titulo}</div>
           <div class="bp-hdr-right">
             <div class="bp-id" style="text-shadow: 2px 2px 1px ${shadowColor};">#0001</div>
-            <div class="bp-fecha-hdr" style="text-shadow: 1px 1px 2px ${shadowColor};">${fecha}</div>
+            <div class="bp-fecha-hdr" style="text-shadow: 2px 2px 1px ${shadowColor};">${fecha}</div>
           </div>
         </div>
         <div class="bp-body">
@@ -802,13 +802,13 @@ function renderPreview(boletas) {
       {text:b.msg2}
     ].filter(m=>m.text);
     const hasAnyMsg = mainMsgs.length > 0 || b.whatsapp;
-    const titleStyle = `text-shadow: 1px 1px 1px ${shadowColor};font-family:'${b.fontCSS||selectedFontCSS}',sans-serif;font-weight:${b.tituloBold?'bold':'normal'};`;
+    const titleStyle = `font-family:'${b.fontCSS||selectedFontCSS}',sans-serif;font-weight:${b.tituloBold?'bold':'normal'};`;
 
     el.innerHTML=`
       ${bgImageData?`<div class="bp-bg" style="background-image:url(${bgImageData})"></div><div class="bp-overlay"></div>`:''}
       <div class="bp-wrap" style="color:${b.cT}">
         <div class="bp-hdr" style="border-color:${b.cL}">
-          <div class="bp-title" style="${titleStyle}">${b.titulo}</div>
+          <div class="bp-title" style="text-shadow: 2px 2px 1px ${shadowColor};${titleStyle}">${b.titulo}</div>
           <div class="bp-hdr-right">
             <div class="bp-id">#${b.id}</div>
             <div class="bp-fecha-hdr">${b.fecha}</div>
@@ -821,14 +821,14 @@ function renderPreview(boletas) {
           </div>
         </div>
         ${hasAnyMsg ? `
-        <div class="bp-msgs-wrap" style="border-color:${b.cL}">
+        <div class="bp-msgs-wrap" style="text-shadow: 2px 2px 1px ${shadowColor};border-color:${b.cL}">
           ${mainMsgs.length ? `
           <div class="bp-msgs">
             ${mainMsgs.map(m=>`<div>${m.text}</div>`).join('')}
           </div>` : ''}
           ${b.whatsapp ? `<div class="bp-wa" style="color:${b.cT}">${b.whatsapp}</div>` : ''}
         </div>` : ''}
-        <div class="bp-footer" style="border-color:${b.cL}">
+        <div class="bp-footer" style="text-shadow: 2px 2px 1px ${shadowColor};border-color:${b.cL}">
           <div class="bp-legal">La Boleta se anulará si presenta borrones o enmendaduras. Se paga al portador.</div>
           <div class="bp-precio-footer" style="color:${b.cN}">$${b.precio}</div>
         </div>
@@ -848,7 +848,7 @@ function renderPreview(boletas) {
 const _textCanvas = document.createElement('canvas');
 const _textCtx = _textCanvas.getContext('2d');
 
-function renderTextToPNG(text, fontCSS, ptSize, weight, color, align, maxWidthPx,shadowColor) {
+function renderTextToPNG(text, fontCSS, ptSize, weight, color, align, maxWidthPx,) {
   const SCALE = 4;
   const PX_PER_PT = 96 / 72;
   const pxSize = ptSize * PX_PER_PT * SCALE;

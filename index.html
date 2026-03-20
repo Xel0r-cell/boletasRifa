@@ -795,14 +795,14 @@ function renderPreview(boletas) {
     const numRowsHTML=[];
     for (let i=0;i<b.nums.length;i+=2) {
       const pair=b.nums.slice(i,i+2);
-      numRowsHTML.push(`<div class="bp-numrow">${pair.map(n=>`<div class="bp-num" style="color:${b.cN};border-color:${b.cN};text-shadow: 2px 2px 1px ${shadowColor};">${String(n).padStart(2,'0')}</div>`).join('')}</div>`);
+      numRowsHTML.push(`<div class="bp-numrow">${pair.map(n=>`<div class="bp-num" style="color:${b.cN};border-color:${b.cN};">${String(n).padStart(2,'0')}</div>`).join('')}</div>`);
     }
     const mainMsgs=[
       {text:b.msg1},
       {text:b.msg2}
     ].filter(m=>m.text);
     const hasAnyMsg = mainMsgs.length > 0 || b.whatsapp;
-    const titleStyle = `font-family:'${b.fontCSS||selectedFontCSS}',sans-serif;font-weight:${b.tituloBold?'bold':'normal'};`;
+    const titleStyle = `text-shadow: 1px 1px 1px ${shadowColor};font-family:'${b.fontCSS||selectedFontCSS}',sans-serif;font-weight:${b.tituloBold?'bold':'normal'};`;
 
     el.innerHTML=`
       ${bgImageData?`<div class="bp-bg" style="background-image:url(${bgImageData})"></div><div class="bp-overlay"></div>`:''}

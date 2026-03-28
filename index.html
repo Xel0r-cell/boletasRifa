@@ -480,6 +480,7 @@ let lastWinners = [];
 let selectedFont = 'helvetica';
 let selectedFontCSS = 'Arial';
 let shadowColor = '#000000';
+const _textCache = new Map();
 
 const fsaSupported = 'showDirectoryPicker' in window;
 if (!fsaSupported) {
@@ -588,7 +589,6 @@ function updateLivePreview() {
       </div>
     </div>`;
 }
-
 // Conectar todos los campos de entrada a la vista previa en tiempo real
 function wireInputs() {
   const ids=['titulo','fecha','expiracion','whatsapp','msg1','msg2',
@@ -608,11 +608,11 @@ function handleImageUpload(input) {
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      const maxD=1200; let w=img.width, h=img.height;
+      const maxD=800; let w=img.width, h=img.height;
       if (w>maxD||h>maxD) { const r=Math.min(maxD/w,maxD/h); w=Math.round(w*r); h=Math.round(h*r); }
       const cvs=document.createElement('canvas'); cvs.width=w; cvs.height=h;
       cvs.getContext('2d').drawImage(img,0,0,w,h);
-      bgImageData=cvs.toDataURL('image/jpeg',.82);
+      bgImageData=cvs.toDataURL('image/jpeg',.55);
       const pv=document.getElementById('imgPreview'); pv.src=bgImageData; pv.style.display='block';
       document.querySelector('.upload-text').textContent='✓ '+file.name;
       updateLivePreview();
@@ -736,6 +736,7 @@ function resetarFecha() {
 // Generador de boletas
 // ═══════════════════════════════════════════════════════════════════════════════
 async function generarBoletas() {
+  _textCache.clear();
   if (!validate()) return;
   const ov=document.getElementById('genOverlay'); ov.classList.add('active');
   document.getElementById('genText').textContent='Preparando datos...';
@@ -849,7 +850,9 @@ const _textCanvas = document.createElement('canvas');
 const _textCtx = _textCanvas.getContext('2d');
 
 function renderTextToPNG(text, fontCSS, ptSize, weight, color, align, maxWidthPx,) {
-  const SCALE = 4;
+  const key = `${text}|${fontCSS}|${ptSize}|${weight}|${color}|${shadowColor}`;
+  if (_textCache.has(key)) return _textCache.get(key);
+  const SCALE = 2;
   const PX_PER_PT = 96 / 72;
   const pxSize = ptSize * PX_PER_PT * SCALE;
   const fontStr = `${weight} ${pxSize}px '${fontCSS}',sans-serif`;
@@ -889,11 +892,13 @@ function renderTextToPNG(text, fontCSS, ptSize, weight, color, align, maxWidthPx
 
   const dataUrl = _textCanvas.toDataURL('image/png');
   const PX_TO_MM = 25.4 / (96 * SCALE);
-  return {
+  const result = {
     dataUrl,
     widthMM:  (_textCanvas.width  - PAD * 2) * PX_TO_MM,
     heightMM: (_textCanvas.height - PAD * 2) * PX_TO_MM
   };
+  _textCache.set(key, result);
+  return result;
 }
 
 function pdfText(pdf, text, fontCSS, ptSize, weight, color, xMM, yMM, opts) {
@@ -909,8 +914,9 @@ function pdfText(pdf, text, fontCSS, ptSize, weight, color, xMM, yMM, opts) {
   if (align === 'center') drawX = xMM - widthMM / 2;
   else if (align === 'right') drawX = xMM - widthMM;
 
-  // yMM se considera la coordenada superior del bloque de texto
-  pdf.addImage(dataUrl, 'PNG', drawX, yMM, widthMM, heightMM, undefined, 'FAST');
+  // Alias único por texto+estilo para que jsPDF no duplique la imagen en el PDF
+  const alias = `T_${text}_${ptSize}_${weight}_${color}`.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 64);
+  pdf.addImage(dataUrl, 'PNG', drawX, yMM, widthMM, heightMM, alias, 'FAST');
   return widthMM;
 }
 
@@ -918,38 +924,65 @@ function pdfText(pdf, text, fontCSS, ptSize, weight, color, xMM, yMM, opts) {
 // Generacion del PDF
 // ═══════════════════════════════════════════════════════════════════════════════
 async function generatePDF(boletas) {
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:[210,290]});
-  const pageW=210,pageH=290,cols=3,rows=5;
-  const padX=3.5,padY=3.5,gapX=2,gapY=2;
-  const bW=(pageW-padX*2-gapX*(cols-1))/cols;
-  const bH=(pageH-padY*2-gapY*(rows-1))/rows;
+  const pages = [];
+  const BOLETAS_POR_ARCHIVO = 225; // 15 páginas × 15 boletas — cambiar a 15 para 1 página
+  for (let i = 0; i < boletas.length; i += BOLETAS_POR_ARCHIVO) pages.push(boletas.slice(i, i + BOLETAS_POR_ARCHIVO));
 
-  const pages=[];
-  for (let i=0;i<boletas.length;i+=15) pages.push(boletas.slice(i,i+15));
+  const dt = getDateTimeStr();
+  const base = (document.getElementById('titulo').value.trim() || 'boletas')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
 
-  for (let pi=0;pi<pages.length;pi++) {
-    if (pi>0) pdf.addPage();
-    const page=pages[pi];
+  for (let pi = 0; pi < pages.length; pi++) {
+    document.getElementById('genText').textContent = `Generando PDF ${pi + 1} de ${pages.length}...`;
+    await new Promise(r => setTimeout(r, 0));
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [210, 290] });
+    const pageW = 210, pageH = 290, cols = 3, rows = 5;
+    const padX = 3.5, padY = 3.5, gapX = 2, gapY = 2;
+    const bW = (pageW - padX * 2 - gapX * (cols - 1)) / cols;
+    const bH = (pageH - padY * 2 - gapY * (rows - 1)) / rows;
+
+    const subPages = [];
+  for (let i = 0; i < pages[pi].length; i += 15) subPages.push(pages[pi].slice(i, i + 15));
+
+  for (let sp = 0; sp < subPages.length; sp++) {
+    if (sp > 0) pdf.addPage();
+    const page = subPages[sp];
+
     if (bgImageData) {
-      pdf.addImage(bgImageData,'JPEG',0,0,pageW,pageH,undefined,'FAST');
-    } else { pdf.setFillColor(15,15,22); pdf.rect(0,0,pageW,pageH,'F'); }
+      pdf.addImage(bgImageData, 'JPEG', 0, 0, pageW, pageH, 'BG_PAGE', 'FAST');
+    } else {
+      pdf.setFillColor(15, 15, 22);
+      pdf.rect(0, 0, pageW, pageH, 'F');
+    }
 
-    pdf.setDrawColor(180,180,180); pdf.setLineWidth(.15);
-    for (let r=1;r<rows;r++) { const cy=padY+r*(bH+gapY)-gapY/2; pdf.setLineDash([1,1],0); pdf.line(padX,cy,pageW-padX,cy); }
-    for (let c=1;c<cols;c++) { const cx=padX+c*(bW+gapX)-gapX/2; pdf.setLineDash([1,1],0); pdf.line(cx,padY,cx,pageH-padY); }
-    pdf.setLineDash([],0);
+    pdf.setDrawColor(180, 180, 180); pdf.setLineWidth(.15);
+    for (let r = 1; r < rows; r++) {
+      const cy = padY + r * (bH + gapY) - gapY / 2;
+      pdf.setLineDash([1, 1], 0); pdf.line(padX, cy, pageW - padX, cy);
+    }
+    for (let c = 1; c < cols; c++) {
+      const cx = padX + c * (bW + gapX) - gapX / 2;
+      pdf.setLineDash([1, 1], 0); pdf.line(cx, padY, cx, pageH - padY);
+    }
+    pdf.setLineDash([], 0);
 
-    for (let bi=0;bi<page.length;bi++) {
-      const b=page[bi],col=bi%cols,row=Math.floor(bi/cols);
-      drawBoleta(pdf,b,padX+col*(bW+gapX),padY+row*(bH+gapY),bW,bH);
+    for (let bi = 0; bi < page.length; bi++) {
+      const b = page[bi];
+      const col = bi % cols;
+      const row = Math.floor(bi / cols);
+      drawBoleta(pdf, b, padX + col * (bW + gapX), padY + row * (bH + gapY), bW, bH);
     }
   }
 
-  const dt=getDateTimeStr();
-  const base=(document.getElementById('titulo').value.trim()||'boletas')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_\- ]/g,'').trim().replace(/\s+/g,'_');
-  await savePDF(pdf,`${base}_${dt}.pdf`);
+  const fileName = pages.length === 1
+    ? `${base}_${dt}.pdf`
+    : `${base}_${dt}_parte${String(pi + 1).padStart(2, '0')}.pdf`;
+
+  await savePDF(pdf, fileName);
+  await new Promise(r => setTimeout(r, 50));
+  }
 }
 
 async function savePDF(pdf, fileName) {
@@ -962,6 +995,15 @@ async function savePDF(pdf, fileName) {
     } catch(e) { showToast('No se pudo guardar en carpeta, descargando...','error'); }
   }
   pdf.save(fileName);
+  const blob = pdf.output('blob');
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = fileName;
+a.click();
+setTimeout(() => URL.revokeObjectURL(url), 5000);
+  console.log('Tamaño del PDF:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+  console.log('bgImageData tamaño:', bgImageData ? (bgImageData.length / 1024).toFixed(0) + ' KB' : 'sin imagen');
   showToast(`✓ Descargado: ${fileName}`,'success');
 }
 
@@ -975,7 +1017,7 @@ function drawBoleta(pdf, b, x, y, w, h) {
 
   // Fondo
   if (bgImageData) {
-    pdf.addImage(bgImageData,'JPEG',x,y,w,h,undefined,'FAST');
+    pdf.addImage(bgImageData, 'JPEG', x, y, w, h, 'BG_BOLETA', 'FAST');
   } else { pdf.setFillColor(22,22,34); pdf.rect(x,y,w,h,'F'); }
 
   pdf.setDrawColor(CL_rgb.r,CL_rgb.g,CL_rgb.b); pdf.setLineWidth(.38);
@@ -1045,6 +1087,7 @@ function drawBoleta(pdf, b, x, y, w, h) {
   const qrX    = qrColX + (qrColW - qrSize) / 2;
   const qrY    = midY   + (midH   - qrSize) / 2+0.5;
 
+  const safeNums = (b.nums || []).filter(n => n !== undefined && n !== null);
   const qrContent = `Numero:${b.nums.join(',')}-Fecha:${b.fecha}-Whatsapp:${b.waNumer||''}`;
   const qrURL = makeQR(qrContent, 512);
   if (qrURL) {
@@ -1277,7 +1320,7 @@ async function descargarGanadoresPDF() {
 
     pdf.setFont('helvetica','bold'); pdf.setFontSize(16);
     pdf.setTextColor(c.r,c.g,c.b);
-    const numsStr = w.nums.map(n=>String(n).padStart(2,'0')).join('  ·  ');
+    const numsStr = (w.nums || []).filter(Boolean).map(n => String(n).padStart(2,'0')).join('  ·  ');
     pdf.text(numsStr, tx, cy+48);
 
     if (waNumer) {

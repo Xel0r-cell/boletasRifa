@@ -1046,7 +1046,7 @@ function drawBoleta(pdf, b, x, y, w, h) {
   const qrY    = midY   + (midH   - qrSize) / 2+0.5;
 
   const qrContent = `Numero:${b.nums.join(',')}-Fecha:${b.fecha}-Whatsapp:${b.waNumer||''}`;
-  const qrURL = makeQR(qrContent, 2048);
+  const qrURL = makeQR(qrContent, 512);
   if (qrURL) {
     pdf.addImage(qrURL, 'PNG', qrX, qrY, qrSize, qrSize);
   } else {
